@@ -1,0 +1,105 @@
+version: '2.4'
+
+services:
+  kotori:
+    image: agross/kotori
+    build:
+      context: kotori
+      labels:
+        local: 'true'
+
+    volumes:
+      - ./kotori/conf.d/:/kotori/:ro
+    ports:
+      - 127.0.0.1:24642:24642
+    depends_on:
+      grafana:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      mqtt:
+        condition: service_healthy
+
+  mqtt:
+    image: eclipse-mosquitto:with-clients
+    build:
+      context: eclipse-mosquitto
+      dockerfile: Dockerfile
+      labels:
+        local: 'true'
+
+    volumes:
+      - ./eclipse-mosquitto/conf.d/:/mosquitto/config/:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "--id", "docker-healthcheck", "--topic", "/docker-healthcheck", "--null-message"]
+      start_period: 5s
+
+  influxdb:
+    image: influxdb:alpine
+
+    environment:
+      INFLUXDB_DATA_QUERY_LOG_ENABLED: 'false'
+      INFLUXDB_HTTP_LOG_ENABLED: 'false'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - influxdb-data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "influx", "-execute", "SHOW databases"]
+      start_period: 5s
+
+  grafana:
+    image: grafana/grafana:custom
+    build:
+      context: grafana
+      labels:
+        local: 'true'
+
+    environment:
+      GF_INSTALL_PLUGINS: fatcloud-windrose-panel
+    ports:
+      - 127.0.0.1:30000:3000
+    volumes:
+      - ./grafana/conf.d:/etc/grafana:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "-S", "-O", "/dev/null", "http://localhost:3000"]
+      start_period: 5s
+
+#  weewx-dummy:
+#    image: jgoerzen/weewx:custom
+#    build:
+#      context: weewx
+#      labels:
+#        local: 'true'
+
+#    volumes:
+#      - ./weewx/dummy/conf.d/weewx.conf:/etc/weewx/weewx.conf:ro
+#      - ./weewx/dummy/data:/var/lib/weewx
+
+  weewx-unten:
+    image: jgoerzen/weewx:custom
+    build:
+      context: weewx
+      labels:
+        local: 'true'
+
+    volumes:
+      - ./weewx/unten/conf.d/weewx.conf:/etc/weewx/weewx.conf:ro
+      - ./weewx/unten/data:/var/lib/weewx
+
+  weewx-oben:
+    image: jgoerzen/weewx:custom
+    build:
+      context: weewx
+      labels:
+        local: 'true'
+
+    volumes:
+      - ./weewx/oben/conf.d/weewx.conf:/etc/weewx/weewx.conf:ro
+      - ./weewx/oben/data:/var/lib/weewx
+
+volumes:
+  mosquitto-data:
+  influxdb-data:
+  grafana-data:
